@@ -37,17 +37,24 @@ class VideoFolder(Dataset):
         return video_files
 
     def _find_classes(self, dir):
-        """Find the class folders in a dataset with nested directories."""
-        classes = set()
+        """Find the class folders with enforced consistent numbering."""
+        enforced_order = [
+            'RealVideo-RealAudio',
+            'RealVideo-FakeAudio',
+            'FakeVideo-RealAudio',
+            'FakeVideo-FakeAudio'
+        ]
+        existing_classes = set()
         for root, dirs, files in os.walk(dir):
             for dir_name in dirs:
-                if dir_name in ["RealVideo-RealAudio", "RealVideo-FakeAudio", "FakeVideo-RealAudio",
-                                "FakeVideo-FakeAudio"]:
-                    classes.add(dir_name)
-
-        classes = sorted(list(classes))
+                if dir_name in enforced_order:
+                    existing_classes.add(dir_name)
+        class_to_idx = {}
+        for idx, class_name in enumerate(enforced_order):
+            if class_name in existing_classes:
+                class_to_idx[class_name] = idx
+        classes = list(class_to_idx.keys())
         print(f"Found classes: {classes}")
-        class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
         return classes, class_to_idx
 
     def __len__(self):
