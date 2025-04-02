@@ -118,22 +118,30 @@ class VideoFolder(Dataset):
             sample_rate (int): Sampling rate of the audio.
         """
         audio_segment = AudioSegment.from_file(video_path)
-        audio_bytes = BytesIO()
-        audio_segment.export(audio_bytes, format='wav', codec='pcm_s16le',
-                             parameters=['-ar', '16000'])
-        audio_bytes.seek(0)
-        audio_segment = AudioSegment.from_file(audio_bytes, format='wav')
+
+        with BytesIO() as audio_bytes:
+            audio_segment.export(
+                audio_bytes,
+                format='wav',
+                codec='pcm_s16le',
+                parameters=['-ar', '16000']
+            )
+            audio_bytes.seek(0)
+
+            audio_segment = AudioSegment.from_file(audio_bytes, format='wav')
+
         waveform = np.array(audio_segment.get_array_of_samples())
         sample_rate = audio_segment.frame_rate
         waveform = waveform.astype(np.float32) / 32768.0
+
         if audio_segment.channels > 1:
             waveform = waveform.reshape(-1, audio_segment.channels).mean(axis=1)
-        # Padding
+
+        # Pad/truncate
         if len(waveform) < fixed_length:
             padding = np.zeros(fixed_length - len(waveform), dtype=np.float32)
             waveform = np.concatenate([waveform, padding])
         elif len(waveform) > fixed_length:
             waveform = waveform[:fixed_length]
-        waveform = torch.from_numpy(waveform).unsqueeze(0)
 
-        return waveform, sample_rate
+        return torch.from_numpy(waveform).unsqueeze(0), sample_rate
