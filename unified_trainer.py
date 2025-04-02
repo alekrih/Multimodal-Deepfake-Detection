@@ -73,6 +73,7 @@ if __name__ == '__main__':
         epoch_iter = 0
 
         for i, data in enumerate(data_loader):
+            # print(f"Batch {i}")
             if data is None:
                 continue
             audio_input = data['audio'].to(device)
@@ -85,13 +86,18 @@ if __name__ == '__main__':
             outputs = model(audio_input, video_input)
             video_logits = outputs[:, 0]
             audio_logits = outputs[:, 1]
-
+            # print(f"Outputs: {outputs}")
+            # print(f"Video Actual: {video_labels}")
+            # print(f"Audio Actual: {audio_labels}")
+            # print(f"Video Predicted: {video_logits}")
+            # print(f"Audio Predicted: {audio_logits}")
             video_loss = criterion(video_logits, video_labels)
             audio_loss = criterion(audio_logits, audio_labels)
             total_loss = video_loss + audio_loss
 
             optimizer.zero_grad()
             total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             if i % opt.loss_freq == 0:
                 print(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()),
