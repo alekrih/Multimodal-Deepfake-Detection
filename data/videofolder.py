@@ -22,7 +22,7 @@ class VideoFolder(Dataset):
             audio_transform (callable, optional): Transform to be applied to the audio waveform.
         """
         self.root = root
-        print(root)
+        # print(root)
         self.transform = transform
         self.audio_transform = audio_transform
         self.frame_limit = frame_limit
