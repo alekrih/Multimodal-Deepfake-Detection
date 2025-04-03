@@ -43,6 +43,15 @@ class UnifiedTrainer:
         self.model = UnifiedModel(opt, self.device).to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-4, weight_decay=1e-5)
 
+        # Initialize scheduler
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='max',  # Monitor validation AP
+            factor=0.5,  # Reduce LR by half
+            patience=3,  # Number of epochs with no improvement
+            verbose=True  # Print messages
+        )
+
         # Loss functions with class weighting
         self.video_criterion = nn.BCEWithLogitsLoss(
             pos_weight=torch.tensor([(435 + 435) / (8539 + 9529)]).to(self.device)
@@ -58,6 +67,12 @@ class UnifiedTrainer:
         # Initialize logging
         self.writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name))
         self.best_val_ap = 0
+        self._init_dynamic_loss()
+
+    def _init_dynamic_loss(self):
+        # Initialize base loss functions
+        self.video_criterion = nn.BCEWithLogitsLoss(reduction='none')
+        self.audio_criterion = nn.BCEWithLogitsLoss(reduction='none')
 
     def _create_data_loaders(self):
         # Weighted sampling for training
@@ -83,7 +98,7 @@ class UnifiedTrainer:
     def train_epoch(self, epoch):
         self.model.train()
         epoch_loss = 0
-
+        self._update_weights()
         for batch_idx, data in enumerate(self.train_loader):
             # Move data to device
             audio = data['audio'].to(self.device)
@@ -101,9 +116,11 @@ class UnifiedTrainer:
             print(f"Audio Actual: {audio_labels}")
 
             # Loss calculation
-            video_loss = self.video_criterion(video_logits, video_labels)
-            audio_loss = self.audio_criterion(audio_logits, audio_labels)
-            loss = 0.3 * video_loss + 0.7 * audio_loss  # Weighted sum
+            video_loss = self.video_criterion(video_logits, data['video_label']) * data['weight']
+            audio_loss = self.audio_criterion(audio_logits, data['audio_label']) * data['weight']
+
+            # Combined loss
+            loss = 0.3 * video_loss.mean() + 0.7 * audio_loss.mean()
 
             # Backward pass
             self.optimizer.zero_grad()
@@ -118,6 +135,26 @@ class UnifiedTrainer:
                                 video_labels, audio_labels)
 
         return epoch_loss / len(self.train_loader)
+
+    def _update_weights(self):
+        """Update weights based on current validation performance"""
+        with torch.no_grad():
+            val_results = self.validate(-1)  # Run validation without logging
+            class_acc = self._calculate_class_accuracy(val_results)
+
+            # Update weights inversely proportional to accuracy
+            new_weights = 1.0 / (class_acc + 0.1)  # Smoothing factor
+            self.class_weights = new_weights / new_weights.sum()
+
+    def _calculate_class_accuracy(self, val_results):
+        """Calculate per-class accuracy from validation results"""
+        preds, labels = val_results
+        class_acc = torch.zeros(self.opt.num_classes)
+        for c in range(self.opt.num_classes):
+            mask = labels == c
+            if mask.any():
+                class_acc[c] = (preds[mask].argmax(1) == labels[mask]).float().mean()
+        return class_acc
 
     def _log_batch(self, epoch, batch_idx, loss, video_logits, audio_logits,
                    video_labels, audio_labels):
@@ -143,14 +180,15 @@ class UnifiedTrainer:
     def validate(self, epoch):
         val_acc, val_ap, _, _, _, _ = validate(self.model, self.val_loader)
         self.scheduler.step(val_ap)
-
         self.writer.add_scalar('val/accuracy', val_acc, epoch)
         self.writer.add_scalar('val/AP', val_ap, epoch)
 
         if val_ap > self.best_val_ap:
             self.best_val_ap = val_ap
-            torch.save(self.model.state_dict(),
-                       os.path.join(self.opt.checkpoints_dir, self.opt.name, 'best_model.pth'))
+            torch.save(
+                self.model.state_dict(),
+                os.path.join(self.opt.checkpoints_dir, self.opt.name, 'best_model.pth')
+            )
 
         return val_acc, val_ap
 
