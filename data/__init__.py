@@ -24,7 +24,6 @@ def custom_collate_fn(batch):
     if len(batch) == 0:
         return None
 
-    # Convert all elements to tensors
     videos = torch.stack([item['video'] for item in batch])
     audios = pad_sequence(
         [item['audio'].squeeze(0) for item in batch],
@@ -35,13 +34,15 @@ def custom_collate_fn(batch):
     labels = torch.tensor([item['label'] for item in batch], dtype=torch.long)
     video_labels = torch.tensor([item['video_label'] for item in batch], dtype=torch.float32)
     audio_labels = torch.tensor([item['audio_label'] for item in batch], dtype=torch.float32)
+    weights = torch.tensor([item['weight'] for item in batch], dtype=torch.float32)
 
     return {
         'video': videos,
         'audio': audios,
         'label': labels,
         'video_label': video_labels,
-        'audio_label': audio_labels
+        'audio_label': audio_labels,
+        'weight': weights
     }
 
 
@@ -57,7 +58,7 @@ def create_dataloader(opt, phase='train'):
         phase_opt.dataroot = os.path.join(opt.dataroot, opt.train_split)
     else:
         phase_opt.dataroot = os.path.join(opt.dataroot, opt.val_split)
-    print(opt.dataroot)
+    # print(opt.dataroot)
     dataset = DeepfakeDataset(phase_opt)
 
     # Only use sampler for training
