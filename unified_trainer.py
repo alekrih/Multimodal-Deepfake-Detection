@@ -3,7 +3,7 @@ import sys
 import time
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from tensorboardX import SummaryWriter
 import numpy as np
 from options.train_options import TrainOptions
@@ -12,6 +12,7 @@ from util import Logger
 from data import create_dataloader
 from validate import validate
 from networks.unified_model import UnifiedModel
+from sklearn.metrics import average_precision_score
 
 # Test config
 vals = ['']
@@ -27,11 +28,159 @@ def get_val_opt():
     val_opt.serial_batches = True
     return val_opt
 
+def get_class_weights(dataset):
+    class_counts = torch.tensor([435, 435, 8539, 9529])  # RR, RF, FR, FF
+    weights = 1. / class_counts
+    return weights / weights.sum()
+
+
+class UnifiedTrainer:
+    def __init__(self, opt):
+        self.opt = opt
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # Initialize model and optimizer
+        self.model = UnifiedModel(opt, self.device).to(self.device)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-4, weight_decay=1e-5)
+
+        # Loss functions with class weighting
+        self.video_criterion = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([(435 + 435) / (8539 + 9529)]).to(self.device)
+        )
+        self.audio_criterion = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([(435 + 8539) / (435 + 9529)]).to(self.device)
+        )
+
+        # Create data loaders
+        self.train_loader = create_dataloader(opt, phase='train')
+        self.val_loader = create_dataloader(opt, phase='val')
+
+        # Initialize logging
+        self.writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name))
+        self.best_val_ap = 0
+
+    def _create_data_loaders(self):
+        # Weighted sampling for training
+        train_dataset = create_dataloader(self.opt, phase='train')
+        weights = get_class_weights(train_dataset)
+        samples_weight = weights[train_dataset.labels]
+        sampler = WeightedRandomSampler(
+            samples_weight, len(samples_weight), replacement=True
+        )
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=self.opt.batch_size,
+            sampler=sampler,
+            num_workers=self.opt.num_threads,
+            pin_memory=True
+        )
+
+        # Standard loader for validation
+        val_loader = create_dataloader(self.opt, phase='val')
+        return train_loader, val_loader
+
+    def train_epoch(self, epoch):
+        self.model.train()
+        epoch_loss = 0
+
+        for batch_idx, data in enumerate(self.train_loader):
+            # Move data to device
+            audio = data['audio'].to(self.device)
+            video = data['video'].to(self.device)
+            video_labels = data['video_label'].to(self.device)
+            audio_labels = data['audio_label'].to(self.device)
+
+            # Forward pass
+            outputs = self.model(audio, video)
+            video_logits = outputs[:, 0]
+            audio_logits = outputs[:, 1]
+            print(f"Video Pred: {video_logits}")
+            print(f"Audio Pred: {audio_logits}")
+            print(f"Video Actual: {video_labels}")
+            print(f"Audio Actual: {audio_labels}")
+
+            # Loss calculation
+            video_loss = self.video_criterion(video_logits, video_labels)
+            audio_loss = self.audio_criterion(audio_logits, audio_labels)
+            loss = 0.3 * video_loss + 0.7 * audio_loss  # Weighted sum
+
+            # Backward pass
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            self.optimizer.step()
+
+            # Logging
+            epoch_loss += loss.item()
+            if batch_idx % 100 == 0:
+                self._log_batch(epoch, batch_idx, loss, video_logits, audio_logits,
+                                video_labels, audio_labels)
+
+        return epoch_loss / len(self.train_loader)
+
+    def _log_batch(self, epoch, batch_idx, loss, video_logits, audio_logits,
+                   video_labels, audio_labels):
+        with torch.no_grad():
+            video_probs = torch.sigmoid(video_logits)
+            audio_probs = torch.sigmoid(audio_logits)
+
+            # Class-specific metrics
+            real_vid_acc = (video_probs[video_labels == 1] > 0.5).float().mean()
+            fake_vid_acc = (video_probs[video_labels == 0] < 0.5).float().mean()
+
+            real_aud_acc = (audio_probs[audio_labels == 1] > 0.5).float().mean()
+            fake_aud_acc = (audio_probs[audio_labels == 0] < 0.5).float().mean()
+
+            # Logging
+            self.writer.add_scalars('train/accuracy', {
+                'video_real': real_vid_acc,
+                'video_fake': fake_vid_acc,
+                'audio_real': real_aud_acc,
+                'audio_fake': fake_aud_acc
+            }, epoch * len(self.train_loader) + batch_idx)
+
+    def validate(self, epoch):
+        val_acc, val_ap, _, _, _, _ = validate(self.model, self.val_loader)
+        self.scheduler.step(val_ap)
+
+        self.writer.add_scalar('val/accuracy', val_acc, epoch)
+        self.writer.add_scalar('val/AP', val_ap, epoch)
+
+        if val_ap > self.best_val_ap:
+            self.best_val_ap = val_ap
+            torch.save(self.model.state_dict(),
+                       os.path.join(self.opt.checkpoints_dir, self.opt.name, 'best_model.pth'))
+
+        return val_acc, val_ap
+
+    def train(self):
+        for epoch in range(self.opt.niter):
+            start_time = time.time()
+
+            # Train phase
+            train_loss = self.train_epoch(epoch)
+
+            # Validation phase
+            val_acc, val_ap = self.validate(epoch)
+
+            # Epoch logging
+            epoch_time = time.time() - start_time
+            print(f"Epoch {epoch} completed in {epoch_time:.1f}s - "
+                  f"Train Loss: {train_loss:.4f} - "
+                  f"Val Acc: {val_acc:.4f} - "
+                  f"Val AP: {val_ap:.4f}")
+
+            # Early stopping check
+            if epoch > 10 and val_ap < 0.6:
+                print("Early stopping due to poor validation performance")
+                break
+
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()
     Testdataroot = os.path.join(opt.dataroot, 'test')
-    opt.dataroot = '{}/{}/'.format(opt.dataroot, opt.train_split)
+    # opt.dataroot = '{}/{}/'.format(opt.dataroot, opt.train_split)
     Logger(os.path.join(opt.checkpoints_dir, opt.name, 'log.log'))
     print('  '.join(list(sys.argv)))
     val_opt = get_val_opt()
@@ -44,74 +193,9 @@ if __name__ == '__main__':
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                                  lr=opt.lr, betas=(opt.beta1, 0.999))
-
-    def testmodel():
-        print(Testdataroot)
-        print('*' * 25)
-        accs = []
-        aps = []
-        print(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()))
-        for v_id, val in enumerate(vals):
-            Testopt.dataroot = '{}/{}'.format(Testdataroot, val)
-            Testopt.classes = ''
-            Testopt.no_resize = False
-            Testopt.no_crop = True
-            acc, ap, _, _, _, _ = validate(model, Testopt)
-            accs.append(acc)
-            aps.append(ap)
-            print("({} {:10}) acc: {:.1f}; ap: {:.1f}".format(v_id, val, acc * 100, ap * 100))
-        print("({} {:10}) acc: {:.1f}; ap: {:.1f}".format(v_id + 1, 'Mean', np.array(accs).mean() * 100,
-                                                          np.array(aps).mean() * 100))
-        print('*' * 25)
-        print(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()))
-
-    model.train()
-    for epoch in range(opt.niter):
-        print("Epoch: {0}".format(epoch))
-        epoch_start_time = time.time()
-        iter_data_time = time.time()
-        epoch_iter = 0
-
-        for i, data in enumerate(data_loader):
-            # print(f"Batch {i}")
-            if data is None:
-                continue
-            audio_input = data['audio'].to(device)
-            video_input = data['video'].to(device)
-            labels = data['label'].to(device)
-            video_labels = (labels == 2) | (labels == 3)
-            audio_labels = (labels == 1) | (labels == 3)
-            video_labels = video_labels.float()
-            audio_labels = audio_labels.float()
-            outputs = model(audio_input, video_input)
-            video_logits = outputs[:, 0]
-            audio_logits = outputs[:, 1]
-            # print(f"Outputs: {outputs}")
-            # print(f"Video Actual: {video_labels}")
-            # print(f"Audio Actual: {audio_labels}")
-            # print(f"Video Predicted: {video_logits}")
-            # print(f"Audio Predicted: {audio_logits}")
-            video_loss = criterion(video_logits, video_labels)
-            audio_loss = criterion(audio_logits, audio_labels)
-            total_loss = video_loss + audio_loss
-
-            optimizer.zero_grad()
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            if i % opt.loss_freq == 0:
-                print(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()),
-                      "Train loss: {} at step: {}".format(total_loss.item(), i))
-                train_writer.add_scalar('loss', total_loss.item(), epoch * len(data_loader) + i)
-
-            model.train()
-        model.eval()
-        acc, ap = validate(model, val_opt)[:2]
-        val_writer.add_scalar('accuracy', acc, epoch)
-        val_writer.add_scalar('ap', ap, epoch)
-        print("(Val @ epoch {}) acc: {}; ap: {}".format(epoch, acc, ap))
-        if epoch % opt.save_epoch_freq == 0:
-            torch.save(model.state_dict(), os.path.join(opt.checkpoints_dir, opt.name, f'epoch_{epoch}.pth'))
-    model.eval()
-    testmodel()
-    torch.save(model.state_dict(), os.path.join(opt.checkpoints_dir, opt.name, 'final_model.pth'))
+    trainer = UnifiedTrainer(opt)
+    trainer.train()
+# if __name__ == '__main__':
+#     opt = TrainOptions().parse()  # Your options class
+#     trainer = UnifiedTrainer(opt)
+#     trainer.train()
