@@ -107,6 +107,10 @@ class VideoFolder(Dataset):
         cap = cv2.VideoCapture(video_path)
         frames = []
         frame_count = 0
+        if self.frame_limit == self.frame_limit:
+            increment = 1
+        else:
+            increment = int(self.frame_limit / self.frame_limit)
 
         while len(frames) < self.frame_limit:
             ret, frame = cap.read()
@@ -120,7 +124,7 @@ class VideoFolder(Dataset):
                 frame = self.transform(frame)
 
             frames.append(frame)
-            frame_count += 1
+            frame_count += increment
 
         cap.release()
 
