@@ -5,11 +5,17 @@ from torch.nn.utils.rnn import pad_sequence
 from .datasets import DeepfakeDataset
 
 
-def get_weighted_sampler(dataset):
-    """Create weighted sampler based on class distribution"""
-    class_counts = torch.bincount(dataset.labels)
-    class_weights = 1. / class_counts.float()
-    sample_weights = class_weights[dataset.labels]
+def get_weighted_sampler(dataset, opt):
+    labels = dataset.dataset.labels
+    class_counts = torch.bincount(labels)
+    class_weights = 1.0 / (class_counts.float() + 1e-6)
+    sample_weights = class_weights[labels]
+    minority_classes = [0, 1]  # RR=0, RF=1
+    oversample_factor = opt.oversample_weight
+    for cls in minority_classes:
+        cls_mask = (labels == cls)
+        sample_weights[cls_mask] *= oversample_factor
+    sample_weights = sample_weights / sample_weights.mean()
     return WeightedRandomSampler(
         weights=sample_weights,
         num_samples=len(sample_weights),
@@ -57,15 +63,14 @@ def create_dataloader(opt, phase='train'):
         phase_opt.dataroot = os.path.join(opt.dataroot, opt.train_split)
     else:
         phase_opt.dataroot = os.path.join(opt.dataroot, opt.val_split)
-    # print(opt.dataroot)
     dataset = DeepfakeDataset(phase_opt)
 
     # Only use sampler for training
     sampler = None
-    if phase == 'train' and opt.class_bal:
-        sampler = get_weighted_sampler(dataset)
+    if phase == 'train' and (opt.class_bal or hasattr(opt, 'oversample_weight')):
+        sampler = get_weighted_sampler(dataset, opt)
 
-    shuffle = (phase == 'train') and not opt.serial_batches and not opt.class_bal
+    shuffle = (phase == 'train') and not opt.serial_batches and (sampler is None)
 
     return torch.utils.data.DataLoader(
         dataset,

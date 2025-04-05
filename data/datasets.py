@@ -15,8 +15,9 @@ class IdentityTransform:
 class DeepfakeDataset:
     def __init__(self, opt):
         self.opt = opt
-        # self.class_weights = self._calculate_class_weights()
         self.dataset = self._create_dataset('train' if opt.isTrain else 'val')
+        self.labels = self.dataset.labels
+        self.classes = self.dataset.classes
         self._calculate_dynamic_weights()  # Calculate initial weights
 
     def __len__(self):
@@ -37,9 +38,7 @@ class DeepfakeDataset:
         self.class_weights = self.class_weights / self.class_weights.sum()  # Normalize
 
     def _create_dataset(self, phase):
-        # root = os.path.join(self.opt.dataroot, phase)
         root = self.opt.dataroot
-        # print(root)
         transform = transforms.Compose([
             self._get_resize_transform(),
             self._get_crop_transform(),

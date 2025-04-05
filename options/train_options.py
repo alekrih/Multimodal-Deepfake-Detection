@@ -22,8 +22,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--no_resize', action='store_true', help='disable image resizing')
         parser.add_argument('--no_crop', action='store_true', help='disable image cropping')
         parser.add_argument('--frame_limit', type=int, default=6, help='number of frames per video')
-        # parser.add_argument('--model_path')
-        # parser.add_argument('--no_resize', action='store_true')
-        # parser.add_argument('--no_crop', action='store_true')
+        parser.add_argument('--oversample_weight', type=float, default=10.0, help='weight for oversampling rare classes (0-1)')
+
         self.isTrain = True
         return parser

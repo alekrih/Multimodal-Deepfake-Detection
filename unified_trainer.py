@@ -101,6 +101,10 @@ class UnifiedTrainer:
                 self._log_batch(epoch, batch_idx, video_logits, audio_logits,
                                 video_labels, audio_labels)
 
+            if opt.oversample_weight > 1:
+                print(f"\nOversampling enabled with weight {opt.oversample_weight} for classes 0 and 1")
+                self._log_class_distribution()
+
         return epoch_loss / len(self.train_loader)
 
     def _update_weights(self):
@@ -143,6 +147,17 @@ class UnifiedTrainer:
                 'audio_real': real_aud_acc,
                 'audio_fake': fake_aud_acc
             }, epoch * len(self.train_loader) + batch_idx)
+
+    def _log_class_distribution(self):
+        """Log the class distribution and sampling weights"""
+        class_counts = torch.bincount(self.train_loader.dataset.labels)
+        weights = self.train_loader.sampler.weights
+
+        print("\nClass Distribution:")
+        for i, count in enumerate(class_counts):
+            class_name = self.train_loader.dataset.classes[i]
+            weight = weights[self.train_loader.dataset.labels == i].mean()
+            print(f"{class_name} (class {i}): {count} samples, sampling weight: {weight:.2f}")
 
     def validate(self, epoch):
         val_acc, val_ap, _, _, _, _ = validate(self.model, self.val_loader)
