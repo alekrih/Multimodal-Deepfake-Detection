@@ -1,14 +1,10 @@
 import torch
 import numpy as np
-from sklearn.metrics import accuracy_score, roc_auc_score, average_precision_score, confusion_matrix, \
+from sklearn.metrics import accuracy_score, average_precision_score, confusion_matrix, \
     classification_report
 
-from networks.unified_model import UnifiedModel
-from options.test_options import TestOptions
-from data import create_dataloader
 
-
-def validate(model, data_loader, phase='val'):
+def validate(model, data_loader):
     """
     Validate the model on the test dataset for 4-class classification.
     Class mapping:

@@ -2,9 +2,6 @@ import argparse
 import os
 import time
 import util
-import torch
-#import models
-#import data
  
 
 class BaseOptions():

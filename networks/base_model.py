@@ -3,7 +3,6 @@ import os
 import torch
 import torch.nn as nn
 from torch.nn import init
-from torch.optim import lr_scheduler
 
 
 class BaseModel(nn.Module):
@@ -47,7 +46,7 @@ class BaseModel(nn.Module):
 
         if self.isTrain and not self.opt.new_optim:
             self.optimizer.load_state_dict(state_dict['optimizer'])
-            ### move optimizer state to GPU
+            # move optimizer state to GPU
             for state in self.optimizer.state.values():
                 for k, v in state.items():
                     if torch.is_tensor(v):

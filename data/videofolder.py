@@ -3,12 +3,8 @@ import cv2
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from torchvision import transforms
 from PIL import Image
 import subprocess
-from moviepy.editor import VideoFileClip
-from pydub import AudioSegment
-from io import BytesIO
 
 
 class VideoFolder(Dataset):
@@ -172,8 +168,3 @@ class VideoFolder(Dataset):
         except Exception as e:
             print(f"Audio extraction failed for {video_path}: {e}")
             return torch.zeros(1, target_length), 16000
-
-    def collate_fn(self, batch):
-        """Custom collate to handle None samples."""
-        batch = [b for b in batch if b is not None]
-        return torch.utils.data.dataloader.default_collate(batch)

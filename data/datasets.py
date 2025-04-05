@@ -1,29 +1,13 @@
-import os
-
-import cv2
-import numpy as np
 import torch
 import torchaudio
-import torchvision.datasets as datasets
 import torchvision.transforms as transforms
-import torchvision.transforms.functional as TF
-from random import random, choice
-from io import BytesIO
-from PIL import Image
 from PIL import ImageFile
-from scipy.ndimage.filters import gaussian_filter
-from torchvision.transforms import InterpolationMode
 from .videofolder import VideoFolder
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class IdentityTransform:
-    def __call__(self, x):
-        return x
-
-
-class LambdaToTensor:
     def __call__(self, x):
         return x
 
@@ -51,42 +35,6 @@ class DeepfakeDataset:
         class_counts = torch.bincount(self.dataset.labels)
         self.class_weights = 1. / (class_counts.float() + 1e-6)  # Avoid division by zero
         self.class_weights = self.class_weights / self.class_weights.sum()  # Normalize
-
-    def create_loaders(self):
-        train_set = self._create_dataset('train')
-        val_set = self._create_dataset('val')
-
-        # Weighted sampler for training
-        if self.opt.isTrain:
-            weights = [self.class_weights[label] for label in train_set.labels]
-            sampler = torch.utils.data.WeightedRandomSampler(
-                weights, len(weights), replacement=True
-            )
-        else:
-            sampler = None
-
-        train_loader = torch.utils.data.DataLoader(
-            train_set,
-            batch_size=self.opt.batch_size,
-            sampler=sampler,
-            num_workers=self.opt.num_threads,
-            pin_memory=True,
-            drop_last=True
-        )
-
-        val_loader = torch.utils.data.DataLoader(
-            val_set,
-            batch_size=self.opt.batch_size,
-            shuffle=False,
-            num_workers=self.opt.num_threads,
-            pin_memory=True
-        )
-
-        return train_loader, val_loader
-
-    def _calculate_class_weights(self):
-        class_counts = torch.tensor([435, 435, 8539, 9529])  # RR, RF, FR, FF
-        return 1. / class_counts
 
     def _create_dataset(self, phase):
         # root = os.path.join(self.opt.dataroot, phase)

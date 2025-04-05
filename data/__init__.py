@@ -1,6 +1,5 @@
 import os
 import torch
-import numpy as np
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.nn.utils.rnn import pad_sequence
 from .datasets import DeepfakeDataset
@@ -78,10 +77,3 @@ def create_dataloader(opt, phase='train'):
         collate_fn=custom_collate_fn,
         drop_last=(phase == 'train')
     )
-
-
-def get_train_val_loaders(opt):
-    """Get both train and validation loaders"""
-    train_loader = create_dataloader(opt, phase='train')
-    val_loader = create_dataloader(opt, phase='val')
-    return train_loader, val_loader

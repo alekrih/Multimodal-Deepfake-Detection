@@ -1,14 +1,12 @@
-import os
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 import numpy as np
 from networks.freqnet import freqnet
-from networks.sslmodel import SSLModel, getAttenF
+from networks.sslmodel import SSLModel
 
 
 class UnifiedModel(nn.Module):
-    def __init__(self, args, device):
+    def __init__(self, device):
         super(UnifiedModel, self).__init__()
         self.device = device
 

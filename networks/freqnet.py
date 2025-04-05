@@ -2,8 +2,6 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torch
 
-__all__ = ['FreqNet, freqnet']
-
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -206,15 +204,15 @@ class FreqNet(nn.Module):
 
         x = x.view(B * num_frames, C, H, W)
 
-        ### HFRI
+        # HFRI
         x = self.hfreqWH(x, 4)
         x = F.conv2d(x, self.weight1, self.bias1, stride=1, padding=0)
         x = F.relu(x, inplace=True)
 
-        ### HFRFC
+        # HFRFC
         x = self.hfreqC(x, 4)
 
-        ### FCL
+        # FCL
         x = torch.fft.fft2(x, norm="ortho")
         x = torch.fft.fftshift(x, dim=[-2, -1])
         x = torch.complex(self.realconv1(x.real), self.imagconv1(x.imag))
@@ -223,15 +221,15 @@ class FreqNet(nn.Module):
         x = torch.real(x)
         x = F.relu(x, inplace=True)
 
-        ### HFRFS
+        # HFRFS
         x = self.hfreqWH(x, 4)
         x = F.conv2d(x, self.weight2, self.bias2, stride=2, padding=0)
         x = F.relu(x, inplace=True)
 
-        ### HFRFC
+        # HFRFC
         x = self.hfreqC(x, 4)
 
-        ### FCL
+        # FCL
         x = torch.fft.fft2(x, norm="ortho")
         x = torch.fft.fftshift(x, dim=[-2, -1])
         x = torch.complex(self.realconv2(x.real), self.imagconv2(x.imag))
@@ -243,12 +241,12 @@ class FreqNet(nn.Module):
         x = self.maxpool(x)
         x = self.layer1(x)
 
-        ### HFRFS
+        # HFRFS
         x = self.hfreqWH(x, 4)
         x = F.conv2d(x, self.weight3, self.bias3, stride=1, padding=0)
         x = F.relu(x, inplace=True)
 
-        ### FCL
+        # FCL
         x = torch.fft.fft2(x, norm="ortho")
         x = torch.fft.fftshift(x, dim=[-2, -1])
         x = torch.complex(self.realconv3(x.real), self.imagconv3(x.imag))
@@ -257,12 +255,12 @@ class FreqNet(nn.Module):
         x = torch.real(x)
         x = F.relu(x, inplace=True)
 
-        ### HFRFS
+        # HFRFS
         x = self.hfreqWH(x, 4)
         x = F.conv2d(x, self.weight4, self.bias4, stride=2, padding=0)
         x = F.relu(x, inplace=True)
 
-        ### FCL
+        # FCL
         x = torch.fft.fft2(x, norm="ortho")
         x = torch.fft.fftshift(x, dim=[-2, -1])
         x = torch.complex(self.realconv4(x.real), self.imagconv4(x.imag))

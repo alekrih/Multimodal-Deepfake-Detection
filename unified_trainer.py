@@ -3,20 +3,13 @@ import sys
 import time
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, WeightedRandomSampler
 from tensorboardX import SummaryWriter
-import numpy as np
 from options.train_options import TrainOptions
 from options.test_options import TestOptions
 from util import Logger
 from data import create_dataloader
 from validate import validate
 from networks.unified_model import UnifiedModel
-from sklearn.metrics import average_precision_score
-
-# Test config
-vals = ['']
-multiclass = [0, 1]
 
 
 def get_val_opt():
@@ -28,11 +21,6 @@ def get_val_opt():
     val_opt.serial_batches = True
     return val_opt
 
-def get_class_weights(dataset):
-    class_counts = torch.tensor([435, 435, 8539, 9529])  # RR, RF, FR, FF
-    weights = 1. / class_counts
-    return weights / weights.sum()
-
 
 class UnifiedTrainer:
     def __init__(self, opt):
@@ -40,7 +28,7 @@ class UnifiedTrainer:
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # Initialize model and optimizer
-        self.model = UnifiedModel(opt, self.device).to(self.device)
+        self.model = UnifiedModel(self.device).to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-4, weight_decay=1e-5)
 
         # Initialize scheduler
@@ -73,27 +61,6 @@ class UnifiedTrainer:
         # Initialize base loss functions
         self.video_criterion = nn.BCEWithLogitsLoss(reduction='none')
         self.audio_criterion = nn.BCEWithLogitsLoss(reduction='none')
-
-    def _create_data_loaders(self):
-        # Weighted sampling for training
-        train_dataset = create_dataloader(self.opt, phase='train')
-        weights = get_class_weights(train_dataset)
-        samples_weight = weights[train_dataset.labels]
-        sampler = WeightedRandomSampler(
-            samples_weight, len(samples_weight), replacement=True
-        )
-
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=self.opt.batch_size,
-            sampler=sampler,
-            num_workers=self.opt.num_threads,
-            pin_memory=True
-        )
-
-        # Standard loader for validation
-        val_loader = create_dataloader(self.opt, phase='val')
-        return train_loader, val_loader
 
     def train_epoch(self, epoch):
         self.model.train()
@@ -131,7 +98,7 @@ class UnifiedTrainer:
             # Logging
             epoch_loss += loss.item()
             if batch_idx % 100 == 0:
-                self._log_batch(epoch, batch_idx, loss, video_logits, audio_logits,
+                self._log_batch(epoch, batch_idx, video_logits, audio_logits,
                                 video_labels, audio_labels)
 
         return epoch_loss / len(self.train_loader)
@@ -156,7 +123,7 @@ class UnifiedTrainer:
                 class_acc[c] = (preds[mask].argmax(1) == labels[mask]).float().mean()
         return class_acc
 
-    def _log_batch(self, epoch, batch_idx, loss, video_logits, audio_logits,
+    def _log_batch(self, epoch, batch_idx, video_logits, audio_logits,
                    video_labels, audio_labels):
         with torch.no_grad():
             video_probs = torch.sigmoid(video_logits)
@@ -225,7 +192,7 @@ if __name__ == '__main__':
     Testopt = TestOptions().parse(print_options=False)
     data_loader = create_dataloader(opt)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = UnifiedModel(opt, device).to(device)
+    model = UnifiedModel(device).to(device)
     train_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "train"))
     val_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "val"))
     criterion = nn.BCEWithLogitsLoss()
@@ -233,7 +200,3 @@ if __name__ == '__main__':
                                  lr=opt.lr, betas=(opt.beta1, 0.999))
     trainer = UnifiedTrainer(opt)
     trainer.train()
-# if __name__ == '__main__':
-#     opt = TrainOptions().parse()  # Your options class
-#     trainer = UnifiedTrainer(opt)
-#     trainer.train()
