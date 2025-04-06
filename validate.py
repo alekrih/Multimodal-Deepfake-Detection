@@ -24,6 +24,15 @@ def validate(model, data_loader):
     video_probs, audio_probs = [], []
     video_labels_all, audio_labels_all = [], []
 
+    class_counts = data_loader.dataset.class_distribution
+    total_samples = len(data_loader.dataset)
+
+    # Calculate real video percentage
+    video_real_pct = 100 * (class_counts['RR'] + class_counts['RF']) / total_samples
+
+    # Calculate real audio percentage
+    audio_real_pct = 100 * (class_counts['RR'] + class_counts['FR']) / total_samples
+
     with torch.no_grad():
         for batch in data_loader:
             if batch is None:
@@ -41,8 +50,8 @@ def validate(model, data_loader):
             audio_p = torch.sigmoid(audio_logits).cpu().numpy()
 
             # Calculate dynamic thresholds
-            video_thresh = np.percentile(video_p, 100 * (435 + 435) / 18938)  # ~4.6%
-            audio_thresh = np.percentile(audio_p, 100 * (435 + 8539) / 18938)  # ~47.4%
+            video_thresh = np.percentile(video_p, video_real_pct)  # ~4.6%
+            audio_thresh = np.percentile(audio_p, audio_real_pct)  # ~47.4%
 
             # Determine predicted classes
             pred_classes = np.zeros_like(labels_batch.cpu().numpy())
@@ -108,6 +117,8 @@ def validate(model, data_loader):
     print(class_report)
 
     return acc, mean_ap, conf_matrix, class_report, y_true, y_pred
+
+
 
 
 if __name__ == '__main__':

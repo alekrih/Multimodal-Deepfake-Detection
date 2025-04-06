@@ -24,14 +24,33 @@ class VideoFolder(Dataset):
         self.frame_limit = frame_limit
         self.phase = phase
 
+        # Initialize class distribution tracking
+        self.class_distribution = {
+            'RR': 0,  # RealVideo-RealAudio
+            'RF': 0,  # RealVideo-FakeAudio
+            'FR': 0,  # FakeVideo-RealAudio
+            'FF': 0   # FakeVideo-FakeAudio
+        }
+
+        self.map = {"RealVideo-RealAudio": "RR",
+                    "RealVideo-FakeAudio": "RF",
+                    "FakeVideo-RealAudio": "FR",
+                    "FakeVideo-FakeAudio": "FF", }
+
         self.video_files = self._find_video_files()
         self.classes, self.class_to_idx = self._find_classes()
         self.labels = self._get_labels()
+        self._calculate_class_distribution()
         print(f"\n{phase.upper()} Dataset:")
         print(f"Total samples: {len(self.video_files)}")
-        for cls in self.classes:
-            count = sum(1 for f in self.video_files if cls in f)
+        for cls, count in self.class_distribution.items():
             print(f"{cls}: {count} samples")
+
+    def _calculate_class_distribution(self):
+        """Calculate and store the count of samples per class"""
+        for video_path in self.video_files:
+            class_name = os.path.basename(os.path.dirname(video_path))
+            self.class_distribution[self.map[class_name]] += 1
 
     def _find_video_files(self):
         """Recursively find all video files in the root directory and its subdirectories."""

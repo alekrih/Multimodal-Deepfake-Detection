@@ -40,18 +40,19 @@ class UnifiedTrainer:
             verbose=True  # Print messages
         )
 
-        # Loss functions with class weighting
-        self.video_criterion = nn.BCEWithLogitsLoss(
-            pos_weight=torch.tensor([(435 + 435) / (8539 + 9529)]).to(self.device)
-        )
-        self.audio_criterion = nn.BCEWithLogitsLoss(
-            pos_weight=torch.tensor([(435 + 8539) / (435 + 9529)]).to(self.device)
-        )
-
         # Create data loaders
         self.train_loader = create_dataloader(opt, phase='train')
         self.val_loader = create_dataloader(opt, phase='val')
 
+        class_counts = self.train_loader.dataset.class_distribution
+
+        # Loss functions with class weighting
+        self.video_criterion = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([(class_counts['RR'] + class_counts['RF']) / (class_counts['FR'] + class_counts['FF'])]).to(self.device)
+        )
+        self.audio_criterion = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([(class_counts['RR'] + class_counts['FR']) / (class_counts['RF'] + class_counts['FF'])]).to(self.device)
+        )
         # Initialize logging
         self.writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name))
         self.best_val_ap = 0
@@ -199,19 +200,19 @@ class UnifiedTrainer:
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()
-    Testdataroot = os.path.join(opt.dataroot, 'test')
+    # Testdataroot = os.path.join(opt.dataroot, 'test')
     # opt.dataroot = '{}/{}/'.format(opt.dataroot, opt.train_split)
     Logger(os.path.join(opt.checkpoints_dir, opt.name, 'log.log'))
     print('  '.join(list(sys.argv)))
-    val_opt = get_val_opt()
-    Testopt = TestOptions().parse(print_options=False)
-    data_loader = create_dataloader(opt)
+    # val_opt = get_val_opt()
+    # Testopt = TestOptions().parse(print_options=False)
+    # data_loader = create_dataloader(opt)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = UnifiedModel(device).to(device)
-    train_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "train"))
-    val_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "val"))
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                                 lr=opt.lr, betas=(opt.beta1, 0.999))
+    # train_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "train"))
+    # val_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "val"))
+    # criterion = nn.BCEWithLogitsLoss()
+    # optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
+    #                              lr=opt.lr, betas=(opt.beta1, 0.999))
     trainer = UnifiedTrainer(opt)
     trainer.train()

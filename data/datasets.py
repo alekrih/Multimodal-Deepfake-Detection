@@ -18,6 +18,7 @@ class DeepfakeDataset:
         self.dataset = self._create_dataset('train' if opt.isTrain else 'val')
         self.labels = self.dataset.labels
         self.classes = self.dataset.classes
+        self.class_distribution = self.dataset.class_distribution
         self._calculate_dynamic_weights()  # Calculate initial weights
 
     def __len__(self):
