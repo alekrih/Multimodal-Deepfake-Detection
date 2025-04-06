@@ -3,6 +3,10 @@ import numpy as np
 from sklearn.metrics import accuracy_score, average_precision_score, confusion_matrix, \
     classification_report
 
+from data import create_dataloader
+from networks.unified_model import UnifiedModel
+from options.test_options import TestOptions
+
 
 def validate(model, data_loader):
     """
@@ -104,3 +108,16 @@ def validate(model, data_loader):
     print(class_report)
 
     return acc, mean_ap, conf_matrix, class_report, y_true, y_pred
+
+
+if __name__ == '__main__':
+    opt = TestOptions().parse(print_options=False)
+    create_dataloader(opt, phase='val')
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = UnifiedModel(device=device)
+    state_dict = torch.load(opt.model_path, map_location='cpu')
+    print(f"Loading the model from: {opt.model_path}")
+    # model.load_state_dict(state_dict['model'])
+    model.to(device)
+    model.eval()
+    acc, mean_ap, conf_matrix, class_report, y_true, y_pred = validate(model, opt)
