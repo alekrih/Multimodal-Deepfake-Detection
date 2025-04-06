@@ -2,7 +2,7 @@ import argparse
 import os
 import time
 import util
- 
+
 
 class BaseOptions():
     def __init__(self):
@@ -40,8 +40,6 @@ class BaseOptions():
         parser.add_argument('--delr_freq', type=int, default=20, help='frequency of changing lr')
         parser.add_argument('--num_classes', type=int, default=4, help='Number of classes in dataset (RR, RF, FR, FF)')
 
-
-        
         self.initialized = True
         return parser
 
@@ -56,7 +54,7 @@ class BaseOptions():
         opt, _ = parser.parse_known_args()
         self.parser = parser
 
-        return opt #parser.parse_args()
+        return opt  # parser.parse_args()
 
     def print_options(self, opt):
         message = ''
@@ -71,7 +69,7 @@ class BaseOptions():
         print(message)
 
         # save to the disk
-        
+
         expr_dir = os.path.join(opt.checkpoints_dir, opt.name)
         util.mkdirs(expr_dir)
         file_name = os.path.join(expr_dir, 'opt.txt')
@@ -82,7 +80,7 @@ class BaseOptions():
     def parse(self, print_options=True):
 
         opt = self.gather_options()
-        opt.isTrain = self.isTrain   # train or test
+        opt.isTrain = self.isTrain  # train or test
         opt.name = opt.name + time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
         # process opt.suffix
         if opt.suffix:

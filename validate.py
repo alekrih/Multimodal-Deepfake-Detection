@@ -119,8 +119,6 @@ def validate(model, data_loader):
     return acc, mean_ap, conf_matrix, class_report, y_true, y_pred
 
 
-
-
 if __name__ == '__main__':
     opt = TestOptions().parse(print_options=False)
     create_dataloader(opt, phase='val')
