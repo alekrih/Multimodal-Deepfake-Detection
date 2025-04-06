@@ -50,8 +50,8 @@ def validate(model, data_loader):
             audio_p = torch.sigmoid(audio_logits).cpu().numpy()
 
             # Calculate dynamic thresholds
-            video_thresh = np.percentile(video_p, video_real_pct)  # ~4.6%
-            audio_thresh = np.percentile(audio_p, audio_real_pct)  # ~47.4%
+            video_thresh = np.percentile(video_p, video_real_pct)
+            audio_thresh = np.percentile(audio_p, audio_real_pct)
 
             # Determine predicted classes
             pred_classes = np.zeros_like(labels_batch.cpu().numpy())

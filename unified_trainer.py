@@ -200,19 +200,9 @@ class UnifiedTrainer:
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()
-    # Testdataroot = os.path.join(opt.dataroot, 'test')
-    # opt.dataroot = '{}/{}/'.format(opt.dataroot, opt.train_split)
     Logger(os.path.join(opt.checkpoints_dir, opt.name, 'log.log'))
     print('  '.join(list(sys.argv)))
-    # val_opt = get_val_opt()
-    # Testopt = TestOptions().parse(print_options=False)
-    # data_loader = create_dataloader(opt)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = UnifiedModel(device).to(device)
-    # train_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "train"))
-    # val_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "val"))
-    # criterion = nn.BCEWithLogitsLoss()
-    # optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-    #                              lr=opt.lr, betas=(opt.beta1, 0.999))
     trainer = UnifiedTrainer(opt)
     trainer.train()
