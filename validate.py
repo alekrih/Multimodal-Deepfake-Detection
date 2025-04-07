@@ -1,14 +1,14 @@
 import torch
 import numpy as np
 from sklearn.metrics import accuracy_score, average_precision_score, confusion_matrix, \
-    classification_report
+    classification_report, roc_auc_score
 
 from data import create_dataloader
 from networks.unified_model import UnifiedModel
 from options.test_options import TestOptions
 
 
-def validate(model, data_loader):
+def validate(model, data_loader, output=True):
     """
     Validate the model on the test dataset for 4-class classification.
     Class mapping:
@@ -106,17 +106,26 @@ def validate(model, data_loader):
     except ValueError:
         video_ap, audio_ap, mean_ap = 0.5, 0.5, 0.5
 
-    print("\nValidation Results:")
-    print(f"Accuracy: {acc:.4f}")
-    print(f"Video AP: {video_ap:.4f}")
-    print(f"Audio AP: {audio_ap:.4f}")
-    print(f"mAP: {mean_ap:.4f}")
-    print("\nConfusion Matrix:")
-    print(conf_matrix)
-    print("\nClassification Report:")
-    print(class_report)
+    # Calculate AUC
+    try:
+        video_auc = roc_auc_score(video_labels_all, video_probs)
+        audio_auc = roc_auc_score(audio_labels_all, audio_probs)
+    except ValueError as e:
+        print(f"AUC calculation warning: {str(e)}")
+        video_auc, audio_auc = 0.5, 0.5  # Neutral value if calculation fails
 
-    return acc, mean_ap, conf_matrix, class_report, y_true, y_pred
+    if output:
+        print("\nValidation Results:")
+        print(f"Accuracy: {acc:.4f}")
+        print(f"Video AP: {video_ap:.4f} | Video AUC: {video_auc:.4f}")
+        print(f"Audio AP: {audio_ap:.4f} | Audio AUC: {audio_auc:.4f}")
+        print(f"mAP: {mean_ap:.4f}")
+        print("\nConfusion Matrix:")
+        print(conf_matrix)
+        print("\nClassification Report:")
+        print(class_report)
+
+    return acc, mean_ap, video_auc, audio_auc, conf_matrix, class_report, y_true, y_pred
 
 
 if __name__ == '__main__':
@@ -129,4 +138,4 @@ if __name__ == '__main__':
     # model.load_state_dict(state_dict['model'])
     model.to(device)
     model.eval()
-    acc, mean_ap, conf_matrix, class_report, y_true, y_pred = validate(model, opt)
+    acc, mean_ap, video_auc, audio_auc, conf_matrix, class_report, y_true, y_pred = validate(model, opt)

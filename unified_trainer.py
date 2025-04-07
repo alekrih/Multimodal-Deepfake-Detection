@@ -27,8 +27,14 @@ class UnifiedTrainer:
         self.opt = opt
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+        # Create data loaders
+        self.train_loader = create_dataloader(opt, phase='train')
+        self.val_loader = create_dataloader(opt, phase='val')
+
+        class_counts = self.train_loader.dataset.class_distribution
+
         # Initialize model and optimizer
-        self.model = UnifiedModel(self.device).to(self.device)
+        self.model = UnifiedModel(self.device, dataset_stats=class_counts).to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-4, weight_decay=1e-5)
 
         # Initialize scheduler
@@ -39,12 +45,6 @@ class UnifiedTrainer:
             patience=3,  # Number of epochs with no improvement
             verbose=True  # Print messages
         )
-
-        # Create data loaders
-        self.train_loader = create_dataloader(opt, phase='train')
-        self.val_loader = create_dataloader(opt, phase='val')
-
-        class_counts = self.train_loader.dataset.class_distribution
 
         # Loss functions with class weighting
         self.video_criterion = nn.BCEWithLogitsLoss(
@@ -102,9 +102,9 @@ class UnifiedTrainer:
                 self._log_batch(epoch, batch_idx, video_logits, audio_logits,
                                 video_labels, audio_labels)
 
-            if opt.oversample_weight > 1:
-                print(f"\nOversampling enabled with weight {opt.oversample_weight} for classes 0 and 1")
-                self._log_class_distribution()
+            # if opt.oversample_weight > 1:
+            #     print(f"\nOversampling enabled with weight {opt.oversample_weight} for classes 0 and 1")
+            #     self._log_class_distribution()
 
         return epoch_loss / len(self.train_loader)
 
@@ -161,7 +161,8 @@ class UnifiedTrainer:
             print(f"{class_name} (class {i}): {count} samples, sampling weight: {weight:.2f}")
 
     def validate(self, epoch):
-        val_acc, val_ap, _, _, _, _ = validate(self.model, self.val_loader)
+        valout = epoch >= 0
+        val_acc, val_ap, _, _, _, _, _, _ = validate(self.model, self.val_loader, valout)
         self.scheduler.step(val_ap)
         self.writer.add_scalar('val/accuracy', val_acc, epoch)
         self.writer.add_scalar('val/AP', val_ap, epoch)
@@ -203,6 +204,6 @@ if __name__ == '__main__':
     Logger(os.path.join(opt.checkpoints_dir, opt.name, 'log.log'))
     print('  '.join(list(sys.argv)))
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = UnifiedModel(device).to(device)
+    # model = UnifiedModel(device).to(device)
     trainer = UnifiedTrainer(opt)
     trainer.train()
