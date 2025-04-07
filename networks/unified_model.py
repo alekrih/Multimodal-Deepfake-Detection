@@ -6,10 +6,10 @@ from networks.sslmodel import SSLModel
 
 
 class UnifiedModel(nn.Module):
-    def __init__(self, device):
+    def __init__(self, device, dataset_stats=None):
         super(UnifiedModel, self).__init__()
         self.device = device
-
+        self.dataset_stats = dataset_stats
         self.video_model = freqnet().to(device)
         self.audio_model = SSLModel(device).to(device)
 
@@ -45,8 +45,23 @@ class UnifiedModel(nn.Module):
                     nn.init.constant_(m.bias, 0)
 
         # Adjusted output biases based on class priors
-        nn.init.constant_(self.fc_video.bias, -np.log(9539 / 435))  # FF vs RR+RF+FR
-        nn.init.constant_(self.fc_audio.bias, -np.log(9529 / 8539))  # FF+RF vs RR+FR
+        if hasattr(self, 'dataset_stats'):
+            ff_count = self.dataset_stats['FF']
+            other_video_count = sum(self.dataset_stats[c] for c in ['RR', 'RF', 'FR'])
+            video_bias = -np.log(ff_count / other_video_count)
+
+            ff_rf_count = self.dataset_stats['FF'] + self.dataset_stats['RF']
+            rr_fr_count = self.dataset_stats['RR'] + self.dataset_stats['FR']
+            audio_bias = -np.log(ff_rf_count / rr_fr_count)
+
+            nn.init.constant_(self.fc_video.bias, video_bias)
+            nn.init.constant_(self.fc_audio.bias, audio_bias)
+        else:
+            # Fallback to default values if no dataset stats
+            nn.init.constant_(self.fc_video.bias, -np.log(9539 / (435 + 435 + 8539)))
+            nn.init.constant_(self.fc_audio.bias, -np.log(9529 / (435 + 8539)))
+        # nn.init.constant_(self.fc_video.bias, -np.log(9539 / 435))  # FF vs RR+RF+FR
+        # nn.init.constant_(self.fc_audio.bias, -np.log(9529 / 8539))  # FF+RF vs RR+FR
 
     def forward(self, audio_input, video_input):
         # Audio pathway
