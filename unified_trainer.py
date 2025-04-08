@@ -59,7 +59,7 @@ class UnifiedTrainer:
     def train_epoch(self, epoch):
         self.model.train()
         epoch_loss = 0
-        self._update_weights()
+        # self._update_weights()
         for batch_idx, data in enumerate(self.train_loader):
             # Move data to device
             audio = data['audio'].to(self.device)
