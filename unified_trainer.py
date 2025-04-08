@@ -46,13 +46,6 @@ class UnifiedTrainer:
             verbose=True  # Print messages
         )
 
-        # Loss functions with class weighting
-        self.video_criterion = nn.BCEWithLogitsLoss(
-            pos_weight=torch.tensor([(class_counts['RR'] + class_counts['RF']) / (class_counts['FR'] + class_counts['FF'])]).to(self.device)
-        )
-        self.audio_criterion = nn.BCEWithLogitsLoss(
-            pos_weight=torch.tensor([(class_counts['RR'] + class_counts['FR']) / (class_counts['RF'] + class_counts['FF'])]).to(self.device)
-        )
         # Initialize logging
         self.writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name))
         self.best_val_ap = 0
