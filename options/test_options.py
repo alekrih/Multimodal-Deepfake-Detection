@@ -12,6 +12,7 @@ class TestOptions(BaseOptions):
         parser.add_argument('--earlystop_epoch', type=int, default=15)
         parser.add_argument('--lr', type=float, default=0.00002, help='initial learning rate for adam')
         parser.add_argument('--niter', type=int, default=0, help='# of iter at starting learning rate')
+        parser.add_argument('--val_split', type=str, default='test', help='train, val, test, etc')
 
         self.isTrain = False
         return parser
