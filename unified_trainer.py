@@ -12,16 +12,6 @@ from validate import validate
 from networks.unified_model import UnifiedModel
 
 
-def get_val_opt():
-    val_opt = TrainOptions().parse(print_options=False)
-    val_opt.dataroot = '{}/{}/'.format(val_opt.dataroot, val_opt.val_split)
-    val_opt.isTrain = False
-    val_opt.no_resize = False
-    val_opt.no_crop = False
-    val_opt.serial_batches = True
-    return val_opt
-
-
 class UnifiedTrainer:
     def __init__(self, opt):
         self.opt = opt
@@ -59,7 +49,6 @@ class UnifiedTrainer:
     def train_epoch(self, epoch):
         self.model.train()
         epoch_loss = 0
-        # self._update_weights()
         for batch_idx, data in enumerate(self.train_loader):
             # Move data to device
             audio = data['audio'].to(self.device)
@@ -100,16 +89,6 @@ class UnifiedTrainer:
             #     self._log_class_distribution()
 
         return epoch_loss / len(self.train_loader)
-
-    def _update_weights(self):
-        """Update weights based on current validation performance"""
-        with torch.no_grad():
-            val_results = self.validate(-1)  # Run validation without logging
-            class_acc = self._calculate_class_accuracy(val_results)
-
-            # Update weights inversely proportional to accuracy
-            new_weights = 1.0 / (class_acc + 0.1)  # Smoothing factor
-            self.class_weights = new_weights / new_weights.sum()
 
     def _calculate_class_accuracy(self, val_results):
         """Calculate per-class accuracy from validation results"""
@@ -154,8 +133,7 @@ class UnifiedTrainer:
             print(f"{class_name} (class {i}): {count} samples, sampling weight: {weight:.2f}")
 
     def validate(self, epoch):
-        valout = epoch >= 0
-        val_acc, val_ap, _, _, _, _, _, _ = validate(self.model, self.val_loader, valout)
+        val_acc, val_ap, _, _, _, _, _, _ = validate(self.model, self.val_loader)
         self.scheduler.step(val_ap)
         self.writer.add_scalar('val/accuracy', val_acc, epoch)
         self.writer.add_scalar('val/AP', val_ap, epoch)
