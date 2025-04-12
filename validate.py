@@ -23,6 +23,7 @@ def validate(model, data_loader, output=True):
     y_true, y_pred = [], []
     video_probs, audio_probs = [], []
     video_labels_all, audio_labels_all = [], []
+    video_preds, audio_preds = [], []
 
     with torch.no_grad():
         for batch in data_loader:
@@ -46,6 +47,10 @@ def validate(model, data_loader, output=True):
             # print(video_logits)
             # print(audio_logits)
 
+            # Binary predictions (0 or 1) based on 0.5 threshold
+            video_binary = (video_p >= 0.5).astype(int)
+            audio_binary = (audio_p >= 0.5).astype(int)
+
             # RR: both real (low fake prob)
             pred_classes[(video_p < 0.5) & (audio_p < 0.5)] = 0
             # RF: real video + fake audio
@@ -62,6 +67,8 @@ def validate(model, data_loader, output=True):
             audio_probs.extend(audio_p)
             video_labels_all.extend(batch['video_label'].numpy())
             audio_labels_all.extend(batch['audio_label'].numpy())
+            video_preds.extend(video_binary)
+            audio_preds.extend(audio_binary)
 
     # Convert to numpy arrays
     y_true = np.array(y_true)
@@ -69,6 +76,8 @@ def validate(model, data_loader, output=True):
 
     # Calculate metrics
     acc = accuracy_score(y_true, y_pred)
+    video_acc = accuracy_score(video_labels_all, video_preds)
+    audio_acc = accuracy_score(audio_labels_all, audio_preds)
     conf_matrix = confusion_matrix(y_true, y_pred)
 
     # Classification report
@@ -105,8 +114,8 @@ def validate(model, data_loader, output=True):
     if output:
         print("\nValidation Results:")
         print(f"Accuracy: {acc:.4f}")
-        print(f"Video AP: {video_ap:.4f} | Video AUC: {video_auc:.4f}")
-        print(f"Audio AP: {audio_ap:.4f} | Audio AUC: {audio_auc:.4f}")
+        print(f"Video Accuracy: {video_acc:.4f} | Video AP: {video_ap:.4f} | Video AUC: {video_auc:.4f}")
+        print(f"Audio Accuracy: {audio_acc:.4f} | Audio AP: {audio_ap:.4f} | Audio AUC: {audio_auc:.4f}")
         print(f"mAP: {mean_ap:.4f}")
         print("\nConfusion Matrix:")
         print(conf_matrix)
