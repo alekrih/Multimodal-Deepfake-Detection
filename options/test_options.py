@@ -7,6 +7,7 @@ class TestOptions(BaseOptions):
         # parser.add_argument('--dataroot')
         parser.add_argument('--model_path')
         parser.add_argument('--no_resize', action='store_true')
+        parser.add_argument('--data_aug', action='store_true', help='if specified, perform additional data augmentation (photometric, blurring, jpegging)')
         parser.add_argument('--no_crop', action='store_true')
         parser.add_argument('--eval', action='store_true', help='use eval mode during test time.')
         parser.add_argument('--earlystop_epoch', type=int, default=15)
