@@ -12,10 +12,10 @@ def validate(model, data_loader, output=True):
     """
     Validate the model on the test dataset for 4-class classification.
     Class mapping:
-    0: FakeVideo-FakeAudio
-    1: FakeVideo-RealAudio
-    2: RealVideo-FakeAudio
-    3: RealVideo-RealAudio
+    0: RealVideo-RealAudio
+    1: RealVideo-FakeAudio
+    2: FakeVideo-RealAudio
+    3: FakeVideo-FakeAudio
     """
     model.eval()
     device = next(model.parameters()).device
@@ -23,15 +23,6 @@ def validate(model, data_loader, output=True):
     y_true, y_pred = [], []
     video_probs, audio_probs = [], []
     video_labels_all, audio_labels_all = [], []
-
-    class_counts = data_loader.dataset.class_distribution
-    total_samples = len(data_loader.dataset)
-
-    # Calculate real video percentage
-    video_real_pct = 100 * (class_counts['RR'] + class_counts['RF']) / total_samples
-
-    # Calculate real audio percentage
-    audio_real_pct = 100 * (class_counts['RR'] + class_counts['FR']) / total_samples
 
     with torch.no_grad():
         for batch in data_loader:
@@ -49,16 +40,20 @@ def validate(model, data_loader, output=True):
             video_p = torch.sigmoid(video_logits).cpu().numpy()
             audio_p = torch.sigmoid(audio_logits).cpu().numpy()
 
-            # Calculate dynamic thresholds
-            video_thresh = np.percentile(video_p, video_real_pct)
-            audio_thresh = np.percentile(audio_p, audio_real_pct)
-
             # Determine predicted classes
             pred_classes = np.zeros_like(labels_batch.cpu().numpy())
-            pred_classes[(video_p <= video_thresh) & (audio_p <= audio_thresh)] = 0  # RR
-            pred_classes[(video_p <= video_thresh) & (audio_p > audio_thresh)] = 1  # RF
-            pred_classes[(video_p > video_thresh) & (audio_p <= audio_thresh)] = 2  # FR
-            pred_classes[(video_p > video_thresh) & (audio_p > audio_thresh)] = 3  # FF
+
+            # print(video_logits)
+            # print(audio_logits)
+
+            # RR: both real (low fake prob)
+            pred_classes[(video_p < 0.5) & (audio_p < 0.5)] = 0
+            # RF: real video + fake audio
+            pred_classes[(video_p < 0.5) & (audio_p >= 0.5)] = 1
+            # FR: fake video + real audio
+            pred_classes[(video_p >= 0.5) & (audio_p < 0.5)] = 2
+            # FF: both fake
+            pred_classes[(video_p >= 0.5) & (audio_p >= 0.5)] = 3
 
             # Store results
             y_true.extend(labels_batch.cpu().numpy())
@@ -71,10 +66,6 @@ def validate(model, data_loader, output=True):
     # Convert to numpy arrays
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
-    video_probs = np.array(video_probs)
-    audio_probs = np.array(audio_probs)
-    video_labels_all = np.array(video_labels_all)
-    audio_labels_all = np.array(audio_labels_all)
 
     # Calculate metrics
     acc = accuracy_score(y_true, y_pred)
@@ -103,16 +94,13 @@ def validate(model, data_loader, output=True):
             audio_labels_all, audio_probs
         )
         mean_ap = (video_ap + audio_ap) / 2
-    except ValueError:
-        video_ap, audio_ap, mean_ap = 0.5, 0.5, 0.5
 
-    # Calculate AUC
-    try:
         video_auc = roc_auc_score(video_labels_all, video_probs)
         audio_auc = roc_auc_score(audio_labels_all, audio_probs)
     except ValueError as e:
-        print(f"AUC calculation warning: {str(e)}")
-        video_auc, audio_auc = 0.5, 0.5  # Neutral value if calculation fails
+        print(f"Metric calculation warning: {e}")
+        video_ap = audio_ap = mean_ap = 0.5
+        video_auc = audio_auc = 0.5
 
     if output:
         print("\nValidation Results:")
@@ -130,12 +118,11 @@ def validate(model, data_loader, output=True):
 
 if __name__ == '__main__':
     opt = TestOptions().parse(print_options=False)
-    create_dataloader(opt, phase='val')
+    val_loader = create_dataloader(opt, phase='val')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = UnifiedModel(device=device)
-    state_dict = torch.load(opt.model_path, map_location='cpu')
+    class_counts = val_loader.dataset.class_distribution
+    model = UnifiedModel(device, class_counts)
     print(f"Loading the model from: {opt.model_path}")
-    # model.load_state_dict(state_dict['model'])
     model.to(device)
     model.eval()
-    acc, mean_ap, video_auc, audio_auc, conf_matrix, class_report, y_true, y_pred = validate(model, opt)
+    acc, mean_ap, video_auc, audio_auc, conf_matrix, class_report, y_true, y_pred = validate(model, val_loader)
