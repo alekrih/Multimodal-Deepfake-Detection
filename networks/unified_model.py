@@ -46,11 +46,9 @@ class UnifiedModel(nn.Module):
 
         # Adjusted output biases based on class priors
         if hasattr(self, 'dataset_stats'):
-            ff_fr_count = self.dataset_stats['FF'] + self.dataset_stats['FR']
-            rr_rf_count = self.dataset_stats['RR'] + self.dataset_stats['RF']
-
-            # other_video_count = sum(self.dataset_stats[c] for c in ['RR', 'RF', 'FR'])
-            video_bias = -np.log(ff_fr_count / rr_rf_count)
+            ff_count = self.dataset_stats['FF']
+            other_video_count = sum(self.dataset_stats[c] for c in ['RR', 'RF', 'FR'])
+            video_bias = -np.log(ff_count / other_video_count)
 
             ff_rf_count = self.dataset_stats['FF'] + self.dataset_stats['RF']
             rr_fr_count = self.dataset_stats['RR'] + self.dataset_stats['FR']
