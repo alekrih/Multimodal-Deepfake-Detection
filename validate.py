@@ -132,6 +132,8 @@ if __name__ == '__main__':
     class_counts = val_loader.dataset.class_distribution
     model = UnifiedModel(device, class_counts)
     print(f"Loading the model from: {opt.model_path}")
+    state_dict = torch.load(opt.model_path, map_location=device)
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
     acc, mean_ap, video_auc, audio_auc, conf_matrix, class_report, y_true, y_pred = validate(model, val_loader)
