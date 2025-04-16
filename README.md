@@ -19,7 +19,11 @@ conda config --append channels pytorch
 conda install tensorboardX OpenCV scipy moviepy pydub scikit-learn torchaudio chardet
 conda install pytorch==1.13.1 torchvision==0.14.1
 ```
+You will also need to download the pre-trained wav2vec 2.0 XLS-R model.
 This should allow you to start training and testing the code.
+
+## Pre-trained wav2vec 2.0 XLS-R (300M)
+Download the XLS-R models from [here](https://github.com/pytorch/fairseq/tree/main/examples/wav2vec/xlsr)
 
 ## Dataset
 The dataset used for training and testing this model was the FakeAVCeleb dataset, which can be obtained by filling out the access form [here](https://github.com/DASH-Lab/FakeAVCeleb). When training and testing, ensure the file structure is as follows:
@@ -42,9 +46,6 @@ dataset
 | | RealVideo-FakeAudio
 | | RealVideo-RealAudio
 ```
-
-## Pre-trained wav2vec 2.0 XLS-R (300M)
-Download the XLS-R models from [here](https://github.com/pytorch/fairseq/tree/main/examples/wav2vec/xlsr)
 
 ## Training
 ```
